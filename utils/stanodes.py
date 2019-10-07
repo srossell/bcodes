@@ -46,6 +46,7 @@ def create_odes_str(id_sp, id_rs, rates, mass_balances):
                     sign, abs(mass_balances[sp][rxn]), rates[rxn])
         dydt += ';\n'
         odes += dydt
+    odes += '\t\treturn dydt;\n'
     odes += '\t}'
     return odes
 
@@ -65,6 +66,7 @@ def create_stan_odes_str(
     """
     trans_dict = create_transdict(params2estimate, params, id_sp)
     rates_ = create_substituted_rates_dict(rates, trans_dict)
-    return create_odes_str(id_sp, id_rs, rates_, mass_balances)
+    odes_str = create_odes_str(id_sp, id_rs, rates_, mass_balances)
+    return odes_str, trans_dict, rates
 
 
