@@ -3,8 +3,13 @@ Create odes strings for stan
 """
 from bcodes.ratevector import subs_id_by_value
 
-def create_transdict(params2estimate, params_dict, id_sp):
+def create_transdict(params2estimate, params_dict, id_sp, params2tune=None):
     """
+    ACCEPTS
+    params2estimate [list str] ids of parameters to estimate
+    param_dict {id: value} parameter values, assumes all parameters have values
+    id_sp [list str] species ids
+    params2tune [list str] ids of paramters which values can be tunned
     """
     params = params_dict.copy()
 
@@ -15,6 +20,14 @@ def create_transdict(params2estimate, params_dict, id_sp):
         ['p[{}]'.format(i + 1) for i, p in enumerate(params2estimate)]
         ))
     params.update(params2estimate_dict)
+    # Substitute x_r[] for tunable parameters
+    if params2tune:
+        params2tune_dict = dict(zip(
+            params2tune,
+            ['x_r[{}]'.format(i + 1) for i, p in enumerate(params2tune)]
+            ))
+        params.update(params2tune_dict)
+
 
     # Create id_sp substitution dictionary
     id_sp_dict = dict(zip(
@@ -51,7 +64,8 @@ def create_odes_str(id_sp, id_rs, rates, mass_balances):
     return odes
 
 def create_stan_odes_str(
-        id_sp, id_rs, rates, mass_balances, params, params2estimate
+        id_sp, id_rs, rates, mass_balances, params, params2estimate,
+        params2tune=None
         ):
     """
     Creates a string describing a system of differential equations from bcodes,
@@ -64,7 +78,7 @@ def create_stan_odes_str(
     params [dict} {parameter id: numerical value}
     params2estimate [list] ids of the parameters to estimate
     """
-    trans_dict = create_transdict(params2estimate, params, id_sp)
+    trans_dict = create_transdict(params2estimate, params, id_sp, params2tune)
     rates_ = create_substituted_rates_dict(rates, trans_dict)
     odes_str = create_odes_str(id_sp, id_rs, rates_, mass_balances)
     return odes_str, trans_dict, rates
