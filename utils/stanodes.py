@@ -6,16 +6,34 @@ from bcodes.ratevector import subs_id_by_value
 
 def create_transdict(params2estimate, params_dict, id_sp, params2tune=None):
     """
-    ACCEPTS
-    params2estimate [list str] ids of parameters to estimate
-    param_dict {id: value} parameter values, assumes all parameters have values
-    id_sp [list str] species ids
-    params2tune [list str] ids of paramters which values can be tunned
+    Create translation dictionary for string substitution. Parameters to
+    estimate are assigned elements of a vector "p". Parameters to tune are
+    assigned elements of a vector "x_r" (recognized by Stan). species ids are
+    assinged elements of a vector "y". Each of the key-value assignments just
+    described are used to update the params_dict, the dictionary of paramter
+    values.
+
+    NOTE. vector elements are enumerated from 1 onwards, so that Stan
+    understands them.
+    Parameters
+    ----------
+    params2estimate : list
+        list of strings. Parameter ids to estimate.
+    param_dict : dict
+        {parameter_id : parameter_value} Dictionay of paramter values
+    id_sp : list
+        list of strings with species ids
+    params2tune : list, optional
+        list of strings. Parameter ids that can be tuned, or given as inputs
+
+    Returns
+    -------
+     : dict
+        {ids: values or vector elements} Dictionary to be used to subsititute
+        species and parameter ids for vector elements, or values.
     """
     params = params_dict.copy()
 
-    # NOTE stan starts counting form 1 not zero
-    # Substitute p[] for parameters to estimate
     params2estimate_dict = dict(
         zip(
             params2estimate,
@@ -40,6 +58,27 @@ def create_transdict(params2estimate, params_dict, id_sp, params2tune=None):
 
 
 def create_substituted_rates_dict(rates_dict, trans_dict):
+    """
+    Substitute the keys in trans_dict for their corresponding values in the
+    values (strings) of rates_dict. In addition the python power operator ("**")
+    is substituted for the operator used in stan ("^").
+
+    Parameters
+    ----------
+    rates_dict : dict
+        {rxn_ids : rate_law} Dictionary of rate ids and their corresponding rate
+        laws as strings.
+    trans_dict : dict
+        {ids : values or vector elements} Dictionary specifying which strings
+        (ids) should be substituted by vector elements or numerical values.
+
+    Returns
+    -------
+    rates : dict
+        {rxn_ds : rate_law} rate ides and their corresponding rate laws as
+        strings, with the ids specified in trans_dict substituted by their
+        corresponging numerical values of vector elements.
+    """
     rates = {}
     for rxn in rates_dict:
         rates[rxn] = subs_id_by_value(rates_dict[rxn], trans_dict)
@@ -47,12 +86,36 @@ def create_substituted_rates_dict(rates_dict, trans_dict):
     return rates
 
 
-def create_odes_str(id_sp, id_rs, rates, mass_balances):
+def create_odes_str(id_sp, id_rs, rates, mass_balances, name="odes"):
+    """
+    Create odes string for substituting inside a Stan code string.
+
+    Parameters
+    ----------
+    id_sp : list
+        list of strings. species ids
+    id_rs : list
+        list of strings. reaction ids
+    rates : dict
+        {rxn_ids : rate_law} Dictionary of rate ids and their corresponding rate
+        laws as strings.
+    mass_balances : dict of dicts
+        {sp_id : {rxn_id: stoichiometric coefficient, ...}}. Specifies the
+        mass balances using the stoichiometic coefficients of the reactions.
+    name: str, optional
+        name to assing to the system of odes fucntion in Stan.
+
+    Returns
+    -------
+    odes : str
+        string encoding the system of ordinary differential equations for a
+        kineitc model, formatted as a function for Stan.
+    """
     odes = """
-    real[] odes(real t, real[] y, real[] p, real[] x_r, int[] x_i)
+    real[] {name}(real t, real[] y, real[] p, real[] x_r, int[] x_i)
         {{
-        real dydt[{}];\n""".format(
-        len(id_sp)
+        real dydt[{len_id_sp}];\n""".format(
+        len_id_sp=len(id_sp), name=name
     )
 
     for i, sp in enumerate(id_sp):
@@ -73,20 +136,59 @@ def create_odes_str(id_sp, id_rs, rates, mass_balances):
 
 
 def create_stan_odes_str(
-    id_sp, id_rs, rates, mass_balances, params, params2estimate, params2tune=None
+    id_sp,
+    id_rs,
+    rates,
+    mass_balances,
+    params,
+    params2estimate,
+    params2tune=None,
+    name="odes",
 ):
     """
-    Creates a string describing a system of differential equations from bcodes,
-    to be used in stan.
-    ACCEPTS
-    id_sp [list of str] species ids
-    id_rs [list of str] reacion ids
-    rates [dict] {rxn_id: rxn_equation}
-    mass_balances [dict] {species id: {rxn_id: stoic coefficient}}
-    params [dict} {parameter id: numerical value}
-    params2estimate [list] ids of the parameters to estimate
+    Create odes string for substituting inside a Stan. First it creates a
+    translation dictionary translation dictionary for string substitutions in
+    the values of the "rates" dictionary (which are strings), using
+    create_transdict(). Parameters to estimate are assigned elements of a vector
+    "p". Parameters to tune are assigned elements of a vector "x_r" (recognized
+    by Stan). species ids are assinged elements of a vector "y". Each of the
+    key-value assignments just described are used to update the params_dict, the
+    dictionary of paramter values. Then creates to odes string using
+    create_odes_str()
+
+    NOTE. vector elements are enumerated from 1 onwards, so that Stan
+    understands them.
+
+    Parameters
+    ----------
+    id_sp : list
+        list of strings. species ids
+    id_rs : list
+        list of strings. reaction ids
+    rates : dict
+        {rxn_ids : rate_law} Dictionary of rate ids and their corresponding rate
+        laws as strings.
+    mass_balances : dict of dicts
+        {sp_id : {rxn_id: stoichiometric coefficient, ...}}. Specifies the
+        mass balances using the stoichiometic coefficients of the reactions.
+    params : dict
+        {parameter_id : parameter_value} Dictionay of paramter values
+    name: str, optional
+        name to assing to the system of odes fucntion in Stan.
+    params2estimate : list
+        list of strings. Parameter ids to estimate.
+    params2tune : list, optional
+        list of strings. Parameter ids that can be tuned, or given as inputs
+    name: str, optional
+        name to assing to the system of odes fucntion in Stan.
+
+    Returns
+    -------
+    odes : str
+        string encoding the system of ordinary differential equations for a
+        kineitc model, formatted as a function for Stan.
     """
     trans_dict = create_transdict(params2estimate, params, id_sp, params2tune)
     rates_ = create_substituted_rates_dict(rates, trans_dict)
-    odes_str = create_odes_str(id_sp, id_rs, rates_, mass_balances)
+    odes_str = create_odes_str(id_sp, id_rs, rates_, mass_balances, name=name)
     return odes_str, trans_dict, rates
