@@ -3,6 +3,7 @@ Create odes strings for stan
 """
 from bcodes.ratevector import subs_id_by_value
 
+
 def create_transdict(params2estimate, params_dict, id_sp, params2tune=None):
     """
     ACCEPTS
@@ -15,58 +16,65 @@ def create_transdict(params2estimate, params_dict, id_sp, params2tune=None):
 
     # NOTE stan starts counting form 1 not zero
     # Substitute p[] for parameters to estimate
-    params2estimate_dict = dict(zip(
-        params2estimate,
-        ['p[{}]'.format(i + 1) for i, p in enumerate(params2estimate)]
-        ))
+    params2estimate_dict = dict(
+        zip(
+            params2estimate,
+            ["p[{}]".format(i + 1) for i, p in enumerate(params2estimate)],
+        )
+    )
     params.update(params2estimate_dict)
     # Substitute x_r[] for tunable parameters
     if params2tune:
-        params2tune_dict = dict(zip(
-            params2tune,
-            ['x_r[{}]'.format(i + 1) for i, p in enumerate(params2tune)]
-            ))
+        params2tune_dict = dict(
+            zip(
+                params2tune,
+                ["x_r[{}]".format(i + 1) for i, p in enumerate(params2tune)],
+            )
+        )
         params.update(params2tune_dict)
 
-
     # Create id_sp substitution dictionary
-    id_sp_dict = dict(zip(
-        id_sp, ['y[{}]'.format(i + 1) for i, sp in enumerate(id_sp)]
-        ))
+    id_sp_dict = dict(zip(id_sp, ["y[{}]".format(i + 1) for i, sp in enumerate(id_sp)]))
 
     return dict(**params, **id_sp_dict)
+
 
 def create_substituted_rates_dict(rates_dict, trans_dict):
     rates = {}
     for rxn in rates_dict:
         rates[rxn] = subs_id_by_value(rates_dict[rxn], trans_dict)
+        rates[rxn] = rates[rxn].replace("**", "^")
     return rates
+
 
 def create_odes_str(id_sp, id_rs, rates, mass_balances):
     odes = """
     real[] odes(real t, real[] y, real[] p, real[] x_r, int[] x_i)
         {{
-        real dydt[{}];\n""".format(len(id_sp))
+        real dydt[{}];\n""".format(
+        len(id_sp)
+    )
 
     for i, sp in enumerate(id_sp):
-        dydt = '\t\tdydt[{}] = '.format(i + 1)  # NOTE stan counts from 1
+        dydt = "\t\tdydt[{}] = ".format(i + 1)  # NOTE stan counts from 1
         for rxn in mass_balances[sp]:
             if mass_balances[sp][rxn] > 0:
-                sign = '+'
+                sign = "+"
             else:
-                sign = '-'
-            dydt += '{0} {1} * {2}'.format(
-                    sign, abs(mass_balances[sp][rxn]), rates[rxn])
-        dydt += ';\n'
+                sign = "-"
+            dydt += "{0} {1} * {2}".format(
+                sign, abs(mass_balances[sp][rxn]), rates[rxn]
+            )
+        dydt += ";\n"
         odes += dydt
-    odes += '\t\treturn dydt;\n'
-    odes += '\t}'
+    odes += "\t\treturn dydt;\n"
+    odes += "\t}"
     return odes
 
+
 def create_stan_odes_str(
-        id_sp, id_rs, rates, mass_balances, params, params2estimate,
-        params2tune=None
-        ):
+    id_sp, id_rs, rates, mass_balances, params, params2estimate, params2tune=None
+):
     """
     Creates a string describing a system of differential equations from bcodes,
     to be used in stan.
@@ -82,5 +90,3 @@ def create_stan_odes_str(
     rates_ = create_substituted_rates_dict(rates, trans_dict)
     odes_str = create_odes_str(id_sp, id_rs, rates_, mass_balances)
     return odes_str, trans_dict, rates
-
-
