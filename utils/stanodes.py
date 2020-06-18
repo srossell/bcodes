@@ -1,6 +1,11 @@
 """
 Create odes strings for stan
 """
+import csv
+
+import numpy as np
+import pandas as pd
+
 from bcodes.ratevector import subs_id_by_value
 
 
@@ -86,7 +91,7 @@ def create_substituted_rates_dict(rates_dict, trans_dict):
     return rates
 
 
-def create_odes_str(id_sp, id_rs, rates, mass_balances, name="odes"):
+def create_odes_str(id_sp, id_rs, rates, mass_balances, name):
     """
     Create odes string for substituting inside a Stan code string.
 
@@ -102,7 +107,7 @@ def create_odes_str(id_sp, id_rs, rates, mass_balances, name="odes"):
     mass_balances : dict of dicts
         {sp_id : {rxn_id: stoichiometric coefficient, ...}}. Specifies the
         mass balances using the stoichiometic coefficients of the reactions.
-    name: str, optional
+    name: str
         name to assing to the system of odes fucntion in Stan.
 
     Returns
@@ -173,8 +178,6 @@ def create_stan_odes_str(
         mass balances using the stoichiometic coefficients of the reactions.
     params : dict
         {parameter_id : parameter_value} Dictionay of paramter values
-    name: str, optional
-        name to assing to the system of odes fucntion in Stan.
     params2estimate : list
         list of strings. Parameter ids to estimate.
     params2tune : list, optional
@@ -192,3 +195,40 @@ def create_stan_odes_str(
     rates_ = create_substituted_rates_dict(rates, trans_dict)
     odes_str = create_odes_str(id_sp, id_rs, rates_, mass_balances, name=name)
     return odes_str, trans_dict, rates
+
+
+# For reading optimization resutls
+def decoment(file_io):
+    """
+    Reads a file and skips files starting with "#"
+
+    Parameters
+    ----------
+    file_io : _ioTextIOWraper
+        obtained when using open(myfile.txt)
+    """
+    for row in file_io:
+        raw = row.split("#")[0].strip()
+        if raw:
+            yield raw
+
+
+def read_csv_ignoring_comments(myfile):
+    """
+    reads a csv file ignoring rows starting with "#".
+
+    Parameters
+    ----------
+    myfile : str
+        path to csv file
+
+    Returns
+    -------
+    df : pd.DataFrame
+        csv table as a pandas dataframe.
+    """
+    with open(myfile, "r") as f:
+        reader = csv.reader(decoment(f))
+        table = [row for row in reader]
+    df = pd.DataFrame(np.array(table).T)
+    return df
