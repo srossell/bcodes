@@ -283,7 +283,7 @@ def read_stanoptimize_result(opt_output_file, params2estimate, t_obs, id_sp, nam
     y_hat_long["sp"] = (
         y_hat_long["ind_sp"]
         .astype(int)
-        .map(dict(zip(range(1, len(m.id_sp) + 1), m.id_sp)))
+        .map(dict(zip(range(1, len(id_sp) + 1), id_sp)))
     )
     y_hat_long["t"] = (
         y_hat_long["ind_t"].astype(int).map(dict(zip(range(1, len(t_obs) + 1), t_obs)))
