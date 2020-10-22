@@ -232,3 +232,64 @@ def read_csv_ignoring_comments(myfile):
         table = [row for row in reader]
     df = pd.DataFrame(np.array(table).T)
     return df
+
+def read_stanoptimize_result(opt_output_file, params2estimate, t_obs, id_sp, name):
+    """
+    Build estimated parameters dictionary and fitted species in time dataframe
+    from the output of stan's optimize (a csv file).
+
+    Parameters
+    ----------
+    opt_output_file : str
+        path to stan's optimize csv file
+    params2estimate : list of str
+        id of the parameters estimated
+    t_obs : list or 1d-array of floats
+        times to which the paramters were fitted
+    id_sp : list of str
+        id of the species fitted
+    name : str
+        name given to the model (and parameters) in the stan model.
+
+    Returns
+    -------
+    opt_p_dict : dict {parameter_id: value}
+        Optimized parameters dictionary
+    y_hat : pd.DataFrame
+        Fitted species in time
+    """
+    opt_df = read_csv_ignoring_comments(opt_output_file)
+
+    # Get optimized parameters
+    p_mask = opt_df[0].str.contains(f"p_{name}")
+    opt_p_dict = dict(zip(params2estimate, opt_df.loc[p_mask, 1].astype(float)))
+
+    #########
+    # Get y_hat
+    yh_mask = opt_df[0].str.contains(f"y_hat_{name}")
+
+    # build indexes for time and species from Stan's result name
+    # y_hat_{name}_{index_time}_{index_species}
+    yh_indexes = (
+        opt_df[yh_mask][0]
+        .str.split(".", expand=True)[[1, 2]]
+        .rename(columns={1: "ind_t", 2: "ind_sp"})
+    )
+    # Get fitted species in time values
+    y_hat_long = pd.merge(
+        yh_indexes, opt_df[yh_mask][[1]], left_index=True, right_index=True
+    ).rename(columns={1: "value"})
+
+    y_hat_long["sp"] = (
+        y_hat_long["ind_sp"]
+        .astype(int)
+        .map(dict(zip(range(1, len(m.id_sp) + 1), m.id_sp)))
+    )
+    y_hat_long["t"] = (
+        y_hat_long["ind_t"].astype(int).map(dict(zip(range(1, len(t_obs) + 1), t_obs)))
+    )
+
+    y_hat = y_hat_long.pivot(columns="sp", values="value", index="t").astype(float)
+
+    return opt_p_dict, y_hat
+
